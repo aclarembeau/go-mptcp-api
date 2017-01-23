@@ -16,6 +16,7 @@ import (
 	"unsafe"
 	"errors"
 	"strconv"
+	"os"
 )
 
 // --- Helper unexported functions -------------------------------------------------------------------------------------
@@ -37,17 +38,17 @@ func getError(functName string, errno int) error {
 }
 
 // Extracts the file descriptor from a TCPConn (and also sets the fd blocking)
-func getSockFd(conn *net.TCPConn) (int, error) {
+func getSockFd(conn *net.TCPConn) (int, *os.File, error) {
 	if conn == nil {
-		return 0, errors.New("getSockFd: connection is nil")
+		return 0, nil, errors.New("getSockFd: connection is nil")
 	}
 
 	fileinfo, fileerror := conn.File()
 	if fileerror != nil {
-		return 0, fileerror
+		return 0, nil, fileerror
 	}
 	sockfd := int(uint(fileinfo.Fd()))
-	return sockfd, nil
+	return sockfd, fileinfo, nil
 }
 
 // Resoves a host name to a sockaddr_any structure (and socklen value)
@@ -69,14 +70,15 @@ func resolveToSockaddr(host string) (*C.struct_sockaddr_any, int, error) {
 // return = [[id subflow 1, priority subflow 1], [id subflow 2, priority subflow 2], ... ]
 func GetSubIDS(conn *net.TCPConn) ([][]int, error) {
 	// get the socket file descriptor
-	sockfd, fdErr := getSockFd(conn)
+	sockfd, file, fdErr := getSockFd(conn)
 	if fdErr != nil {
 		return nil, fmt.Errorf("getSubflows: (extracting fd) %v", fdErr)
 	}
 	defer syscall.SetNonblock(sockfd, true) // Restablishing non-blocking property
+	defer file.Close()
 
 	// get the subflow list pointer
-	subflowsInfo := C.getSubflows(C.int(sockfd))
+	subflowsInfo := C.getSubIDS(C.int(sockfd))
 	nSubflows := int(subflowsInfo.resultCount)
 	ptrSubflows := unsafe.Pointer(subflowsInfo.resultPtr)
 
@@ -106,14 +108,15 @@ func GetSubIDS(conn *net.TCPConn) ([][]int, error) {
 // and distant endpoints using the host:port syntax.
 func GetSubTuple(conn *net.TCPConn, subId int) (string, string, error) {
 	// get the socket file descriptor
-	sockfd, fdErr := getSockFd(conn)
+	sockfd, file, fdErr := getSockFd(conn)
 	if fdErr != nil {
 		return "","", fmt.Errorf("inspectSubflow: (extracting fd) %v", fdErr)
 	}
 	defer syscall.SetNonblock(sockfd, true) // Restablishing non-blocking property
+	defer file.Close()
 
 	// call the c function to inspect a subflow from the mptcp library
-	subflowInspect := C.inspectSubflow(C.int(sockfd), C.int(subId))
+	subflowInspect := C.getSubTuple(C.int(sockfd), C.int(subId))
 
 	err := getError("inspectSubflow", int(subflowInspect.errnoValue))
 	if err != nil {
@@ -133,14 +136,15 @@ func GetSubTuple(conn *net.TCPConn, subId int) (string, string, error) {
 // indicates how to close the subflow (this parameter is currently not used)
 func CloseSub(conn *net.TCPConn, subId int, how int) error {
 	// get the socket file descriptor
-	sockfd, fdErr := getSockFd(conn)
+	sockfd, file, fdErr := getSockFd(conn)
 	if fdErr != nil {
 		return fmt.Errorf("closeSubflow: (extracting fd) %v", fdErr)
 	}
 	defer syscall.SetNonblock(sockfd, true) // Restablishing non-blocking property
+	defer file.Close()
 
 	// call the c function to close a subflow from the mptcp library
-	cResultErrno := C.closeSubflow(C.int(sockfd), C.int(subId), C.int(how))
+	cResultErrno := C.closeSub(C.int(sockfd), C.int(subId), C.int(how))
 
 	// make fancy output depending on the error code
 	return getError("closeSubflow", int(cResultErrno))
@@ -150,11 +154,12 @@ func CloseSub(conn *net.TCPConn, subId int, how int) error {
 // type (integer) and the option value.
 func SetSubSockoptInt(conn *net.TCPConn, subId int, level int, opt int, val int) error {
 	// get the socket file descriptor
-	sockfd, fdErr := getSockFd(conn)
+	sockfd, file, fdErr := getSockFd(conn)
 	if fdErr != nil {
 		return fmt.Errorf("getSubflowSockoptInt: (extracting fd) %v", fdErr)
 	}
 	defer syscall.SetNonblock(sockfd, true) // Restablishing non-blocking property
+	defer file.Close()
 
 	// call the c function to add a subflow from the mptcp library
 	cResultErrno := C.setSubSockoptInt(C.int(sockfd), C.int(subId), C.int(level), C.int(opt), C.int(val))
@@ -166,11 +171,12 @@ func SetSubSockoptInt(conn *net.TCPConn, subId int, level int, opt int, val int)
 // type
 func GetSubSockoptInt(conn *net.TCPConn, subId int, level int, opt int) (int, error) {
 	// get the socket file descriptor
-	sockfd, fdErr := getSockFd(conn)
+	sockfd, file, fdErr := getSockFd(conn)
 	if fdErr != nil {
 		return 0, fmt.Errorf("getSubflowSockoptInt: (extracting fd) %v", fdErr)
 	}
 	defer syscall.SetNonblock(sockfd, true) // Restablishing non-blocking property
+	defer file.Close()
 
 	// call the c function to add a subflow from the mptcp library
 	cResult := C.getSubSockoptInt(C.int(sockfd), C.int(subId), C.int(level), C.int(opt))
@@ -208,11 +214,12 @@ func OpenSub(conn *net.TCPConn, localEndpoint string, distantEndpoint string)(in
 	}
 
 	// get the socket file descriptor
-	sockfd, fdErr := getSockFd(conn)
+	sockfd, file, fdErr := getSockFd(conn)
 	if fdErr != nil {
 		return 0, fmt.Errorf("openSubflow: (extracting fd) %v", fdErr)
 	}
 	defer syscall.SetNonblock(sockfd, true) // Restablishing non-blocking property
+	defer file.Close()
 
 	sourceSockaddr, sourceSocklen, sourceError := resolveToSockaddr(sourceHost)
 	if sourceError != nil {
@@ -224,7 +231,7 @@ func OpenSub(conn *net.TCPConn, localEndpoint string, distantEndpoint string)(in
 	}
 
 	// call the c function to add a subflow from the mptcp library
-	structResult := C.openSubflow(
+	structResult := C.openSub(
 		C.int(sockfd),
 		unsafe.Pointer(sourceSockaddr), C.int(sourceSocklen), C.int(sourcePort),
 		unsafe.Pointer(destSockaddr), C.int(destSocklen), C.int(destPort))

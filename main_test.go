@@ -49,7 +49,7 @@ func waitABit(){
 // ---------------------------------------------------------------------------------------------------------------------
 
 // Tests the function used to open the subflows
-func TestOpenSubflow(t *testing.T) {
+func TestOpenSub(t *testing.T) {
 	// Establish the connection
 
 	conn := establishConnection(t, SOURCE_HOST, "64100", DEST_HOST, "80")
@@ -91,7 +91,7 @@ func TestOpenSubflow(t *testing.T) {
 }
 
 // Tests the function used to get information about the subflow tuple
-func TestInspectSubflow(t *testing.T) {
+func TestGetSubTuple(t *testing.T) {
 	// Establish the connection
 
 	conn := establishConnection(t, SOURCE_HOST, "64200", DEST_HOST, "80")
@@ -142,7 +142,7 @@ func TestInspectSubflow(t *testing.T) {
 }
 
 // Tests the function used to remove the subflows
-func TestCloseSubflow(t *testing.T) {
+func TestCloseSub(t *testing.T) {
 	// Establishing connection
 
 	conn := establishConnection(t, SOURCE_HOST, "64300", DEST_HOST, "80")
@@ -170,7 +170,7 @@ func TestCloseSubflow(t *testing.T) {
 
 }
 
-func TestGetSubflows(t *testing.T) {
+func TestGetSubIDS(t *testing.T) {
 	// Establishing connection
 
 	conn := establishConnection(t, SOURCE_HOST, "64400", DEST_HOST, "80")
@@ -210,7 +210,7 @@ func TestGetSubflows(t *testing.T) {
 	}
 
 	testExcepted(t, reflect.DeepEqual([]int{4,3,2,1,0},ids), "checking subflow IDs - maxvalue", "4,3,2,1,0", fmt.Sprintf("%v", ids))
-	testExcepted(t, reflect.DeepEqual([]int{0,0,0,0,0} ,prios), "checking subflow priorities", "0,0,0,0,0", fmt.Sprintf("%v", ids))
+	testExcepted(t, reflect.DeepEqual([]int{0,0,0,0,0} ,prios), "checking subflow priorities", "0,0,0,0,0", fmt.Sprintf("%v", prios))
 }
 
 func TestSubsockopt(t *testing.T) {

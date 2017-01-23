@@ -47,7 +47,7 @@ struct getSubSockoptIntResult getSubSockoptInt(int sockfd, int flowid, int level
 	return res;
 }
 
-struct subflowInspectResult inspectSubflow(int sockfd, int flowid){
+struct getSubTupleResult getSubTuple(int sockfd, int flowid){
 	// inspecting subflow
 	unsigned int optlen = sizeof(struct sockaddr_in6) *2 + 40;
 
@@ -61,7 +61,7 @@ struct subflowInspectResult inspectSubflow(int sockfd, int flowid){
     if(r != 0){
         r = errno;
     }
-	struct subflowInspectResult res = {r, NULL, NULL, 0, 0};
+	struct getSubTupleResult res = {r, NULL, NULL, 0, 0};
 	if(r != 0){
 	    free(sub_tuple);
         return res;
@@ -101,7 +101,7 @@ struct subflowInspectResult inspectSubflow(int sockfd, int flowid){
 	return res;
 }
 
-int closeSubflow(int sockfd, int flowid, int how){
+int closeSub(int sockfd, int flowid, int how){
 	int error;
 
 	int optlen = sizeof(struct mptcp_close_sub_id);
@@ -117,7 +117,7 @@ int closeSubflow(int sockfd, int flowid, int how){
 	return error;
 }
 
-struct openSubflowResult openSubflow(int sockfd, void *sourceaddr, int sourcelen, int sourceport, void *destaddr, int destlen, int destport){
+struct openSubflowResult openSub(int sockfd, void *sourceaddr, int sourcelen, int sourceport, void *destaddr, int destlen, int destport){
 	int error;
 
 	int optlen = sizeof(struct mptcp_sub_tuple) + sourcelen + destlen;
@@ -167,7 +167,7 @@ struct openSubflowResult openSubflow(int sockfd, void *sourceaddr, int sourcelen
 
 
 
-struct getSubflowsInfo getSubflows(int sockfd){
+struct getSubflowsInfo getSubIDS(int sockfd){
 	int i;
 	unsigned int optlen = SUBLIST_MIN_SIZE;
 	struct mptcp_sub_ids *ids = malloc(optlen); // Transmitted C-to-go #3: Must be freed
