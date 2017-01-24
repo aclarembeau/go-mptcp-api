@@ -11,8 +11,18 @@ import (
 	"time"
 )
 
+// V4 tests
+
 var SOURCE_HOST string = "192.168.33.10"
+var ANY_SOURCE_HOST string = ""
 var DEST_HOST string = "130.104.230.45"
+
+// V6 tests
+
+/*var SOURCE_HOST string = "::"
+var ANY_SOURCE_HOST string = "::"
+var DEST_HOST string = "multipath-tcp.org"*/
+
 
 // ---------------------------------------------------------------------------------------------------------------------
 
@@ -60,7 +70,7 @@ func TestOpenSub(t *testing.T) {
 	t.Log("Opening three valid subflows")
 	fmt.Fprint(conn, "GET / HTTP/1.1\r\n")
 	openedId1, openedError1 := OpenSub(conn, net.JoinHostPort(SOURCE_HOST, "64101"), net.JoinHostPort(DEST_HOST, "80"))
-	openedId2, openedError2 := OpenSub(conn, net.JoinHostPort("", "64102"), net.JoinHostPort(DEST_HOST, "80"))
+	openedId2, openedError2 := OpenSub(conn, net.JoinHostPort(ANY_SOURCE_HOST, "64102"), net.JoinHostPort(DEST_HOST, "80"))
 	openedId3, openedError3 := OpenSub(conn, net.JoinHostPort(SOURCE_HOST, "0"), net.JoinHostPort(DEST_HOST, "80"))
 	waitABit()
 
@@ -80,9 +90,9 @@ func TestOpenSub(t *testing.T) {
 	// Part 2 : Opening 3 erroneous subflows and checking the error
 
 	t.Log("Opening three invalid subflows")
-	_, err2 := OpenSub(nil, net.JoinHostPort("", "64105"), net.JoinHostPort(DEST_HOST, "80"))
-	_, err3 := OpenSub(conn, net.JoinHostPort("", "20"), net.JoinHostPort(DEST_HOST, "80"))
-	_, err4 := OpenSub(conn, net.JoinHostPort("", "64100"), net.JoinHostPort(DEST_HOST, "80"))
+	_, err2 := OpenSub(nil, net.JoinHostPort(ANY_SOURCE_HOST, "64105"), net.JoinHostPort(DEST_HOST, "80"))
+	_, err3 := OpenSub(conn, net.JoinHostPort(ANY_SOURCE_HOST, "20"), net.JoinHostPort(DEST_HOST, "80"))
+	_, err4 := OpenSub(conn, net.JoinHostPort(ANY_SOURCE_HOST, "64100"), net.JoinHostPort(DEST_HOST, "80"))
 
 	t.Log("Checking result")
 	testExcepted(t, err2 != nil, "opening nil-connection subflow", "failure", "success")
@@ -113,7 +123,7 @@ func TestGetSubTuple(t *testing.T) {
 	// Part 2: Open a new subflow and inspect it
 
 	t.Log("Opening new subflow")
-	_, openingError := OpenSub(conn, net.JoinHostPort("", "64201"), net.JoinHostPort(DEST_HOST, "80"))
+	_, openingError := OpenSub(conn, net.JoinHostPort(ANY_SOURCE_HOST, "64201"), net.JoinHostPort(DEST_HOST, "80"))
 	waitABit()
 
 	testExcepted(t, openingError == nil, "opening new subflow", "success", fmt.Sprintf("error '%v'", openingError))
@@ -152,7 +162,7 @@ func TestCloseSub(t *testing.T) {
 
 	t.Log("Opening new subflow")
 	fmt.Fprint(conn, "GET / HTTP/1.1\r\n")
-	_, openingError := OpenSub(conn, net.JoinHostPort("", "64301"), net.JoinHostPort(DEST_HOST, "80"))
+	_, openingError := OpenSub(conn, net.JoinHostPort(ANY_SOURCE_HOST, "64301"), net.JoinHostPort(DEST_HOST, "80"))
 	waitABit()
 
 	testExcepted(t, openingError == nil, "opening new subflow", "success", fmt.Sprintf("error '%v'", openingError))
@@ -222,7 +232,7 @@ func TestSubsockopt(t *testing.T) {
 	// Get command
 	fmt.Fprint(conn, "GET / HTTP/1.1\r\n")
 	t.Log("Opening new subflow")
-	_, openingError := OpenSub(conn, net.JoinHostPort("", "61501"), net.JoinHostPort(DEST_HOST, "80"))
+	_, openingError := OpenSub(conn, net.JoinHostPort(ANY_SOURCE_HOST, "61501"), net.JoinHostPort(DEST_HOST, "80"))
 	waitABit()
 
 	testExcepted(t, openingError == nil, "opening new subflow", "success", fmt.Sprintf("error '%v'", openingError))
@@ -256,10 +266,10 @@ func Example() {
 	fmt.Fprint(conn, "GET  / HTTP/1.1\r\n")
 
 	// Opening 4 subflows
-	OpenSub(conn, net.JoinHostPort("", "64002"), net.JoinHostPort(DEST_HOST, "80"))
-	OpenSub(conn, net.JoinHostPort("", "64003"), net.JoinHostPort(DEST_HOST, "80"))
-	OpenSub(conn, net.JoinHostPort("", "64004"), net.JoinHostPort(DEST_HOST, "80"))
-	OpenSub(conn, net.JoinHostPort("", "64005"), net.JoinHostPort(DEST_HOST, "80"))
+	OpenSub(conn, net.JoinHostPort(ANY_SOURCE_HOST, "64002"), net.JoinHostPort(DEST_HOST, "80"))
+	OpenSub(conn, net.JoinHostPort(ANY_SOURCE_HOST, "64003"), net.JoinHostPort(DEST_HOST, "80"))
+	OpenSub(conn, net.JoinHostPort(ANY_SOURCE_HOST, "64004"), net.JoinHostPort(DEST_HOST, "80"))
+	OpenSub(conn, net.JoinHostPort(ANY_SOURCE_HOST, "64005"), net.JoinHostPort(DEST_HOST, "80"))
 	waitABit()
 
 	// Listing subflows

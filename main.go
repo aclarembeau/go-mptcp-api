@@ -51,9 +51,9 @@ func getSockFd(conn *net.TCPConn) (int, *os.File, error) {
 	return sockfd, fileinfo, nil
 }
 
-// Resoves a host name to a sockaddr_any structure (and socklen value)
-func resolveToSockaddr(host string) (*C.struct_sockaddr_any, int, error) {
-	ip, err := net.ResolveIPAddr("ip", host)
+// Resoves a host name to a sockaddr_any structure (and socklen value), if the protocol is specified
+func resolveToSockaddrWithProto(host string, proto string) (*C.struct_sockaddr_any, int, error) {
+	ip, err := net.ResolveIPAddr(proto, host)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -62,6 +62,20 @@ func resolveToSockaddr(host string) (*C.struct_sockaddr_any, int, error) {
 	sockaddrC := sockaddr.AnyToCAny(sockaddrAny)
 
 	return sockaddrC, int(socklen), err
+}
+
+// Resoves a host name to a sockaddr_any structure (and socklen value), with a constraint on the socklen
+func resolveToSockaddrForced(host string, forced_len int) (*C.struct_sockaddr_any, int, error) {
+	if(forced_len == 28){
+		return resolveToSockaddrWithProto(host, "ip6")
+	} else{
+		return resolveToSockaddrWithProto(host, "ip4")
+	}
+}
+
+// Resoves a host name to a sockaddr_any structure (and socklen value), with no constraints
+func resolveToSockaddr(host string) (*C.struct_sockaddr_any, int, error) {
+	return resolveToSockaddrWithProto(host, "ip")
 }
 
 // --- Library exported functions --------------------------------------------------------------------------------------
@@ -225,7 +239,7 @@ func OpenSub(conn *net.TCPConn, localEndpoint string, distantEndpoint string)(in
 	if sourceError != nil {
 		return 0, fmt.Errorf("openSubflow: (resolving source) %v", sourceError)
 	}
-	destSockaddr, destSocklen, destError := resolveToSockaddr(destHost)
+	destSockaddr, destSocklen, destError := resolveToSockaddrForced(destHost, sourceSocklen)
 	if destError != nil {
 		return 0, fmt.Errorf("openSubflow: (resolving destination) %v", destError)
 	}
