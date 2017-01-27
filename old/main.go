@@ -1,10 +1,11 @@
 // Experimental Go binding for the multipath-tcp api
 // Based on the internet draft of B. Hesmans and O. Bonaventure
 // from https://tools.ietf.org/html/draft-hesmans-mptcp-socket-00
-package mptcp
+package main
 
-// #include "mptcp.h"
 // #include <stdlib.h>
+// #include "mptcplib.h"
+// #include "mptcp.h"
 import "C"
 
 import "github.com/jbenet/go-sockaddr/net"
@@ -158,7 +159,7 @@ func CloseSub(conn *net.TCPConn, subId int, how int) error {
 	defer file.Close()
 
 	// call the c function to close a subflow from the mptcp library
-	cResultErrno := C.closeSub(C.int(sockfd), C.int(subId), C.int(how))
+	cResultErrno := C.mptcplib_close_sub(C.int(sockfd), C.int(subId), C.int(how))
 
 	// make fancy output depending on the error code
 	return getError("closeSubflow", int(cResultErrno))

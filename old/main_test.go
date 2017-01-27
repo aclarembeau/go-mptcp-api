@@ -1,4 +1,4 @@
-package mptcp
+package main
 
 import (
 	"bytes"
@@ -107,6 +107,7 @@ func TestGetSubTuple(t *testing.T) {
 	conn := establishConnection(t, SOURCE_HOST, "64200", DEST_HOST, "80")
 	defer conn.Close()
 
+
 	// Part 1: Inspect the main subflow
 
 	t.Log("Inspecting subflow #1")
@@ -142,7 +143,7 @@ func TestGetSubTuple(t *testing.T) {
 
 	t.Log("Inspecting invalid subflows")
 	_, _, inspectErr3 := GetSubTuple(conn, 0)
-	_, _, inspectErr4 := GetSubTuple(nil, 1)
+	_, _, inspectErr4 := GetSubTuple(nil, 2)
 	_, _, inspectErr5 := GetSubTuple(conn, 50)
 
 	testExcepted(t, inspectErr3 != nil, "inspecting subflow #0", "failure", "success")
