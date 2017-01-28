@@ -104,28 +104,16 @@ func OpenSub(conn *net.TCPConn, flow *Subflow) error {
 	cRemoteHost := C.CString(remoteHost)
 	defer C.free(unsafe.Pointer(cRemoteHost))
 
-	// (4) Call the C resolving functions
-	localStruct := C.resolveAddrWithPort(cLocalHost, C.size_t(len(localHost)), C.ushort(localPortInt), C.int(C.AF_UNSPEC))
-	defer C.freeAddrWithPort(localStruct)
-	if localStruct.addr == nil {
-		return fmt.Errorf("OpenSub: (resolving local) Unable to resolve %s", localHost)
-	}
+	// (4) opening flow
+	cFlow := C.mptcplib_make_flow(cLocalHost, C.ushort(localPortInt), cRemoteHost, C.ushort(remotePortInt))
+	errnoValue := C.mptcplib_open_sub(fd, &cFlow)
+	defer C.mptcplib_free_flow(cFlow)
 
-	remoteStruct := C.resolveAddrWithPort(cRemoteHost, C.size_t(len(remoteHost)), C.ushort(remotePortInt), C.int(localStruct.addr.sa_family))
-	defer C.freeAddrWithPort(remoteStruct)
-	if remoteStruct.addr == nil {
-		return fmt.Errorf("OpenSub: (resolving remote) Unable to resolve %s", remoteHost)
+	// (5) build the result
+	if (errnoValue != 0) {
+		return errnoToError("OpenSub", int(errnoValue))
 	}
-
-	// (5) open the subflow
-	openedTuple := C.mptcplib_open_sub(fd, localStruct.addr, localStruct.addr_len, remoteStruct.addr, remoteStruct.addr_len, C.int(flow.Prio))
-	defer C.mptcplib_free_res_subtuple(openedTuple)
-
-	// (6) build the result
-	if (openedTuple.errnoValue != 0) {
-		return errnoToError("OpenSub", int(openedTuple.errnoValue))
-	}
-	flow.Id = int(openedTuple.id)
+	flow.Id = int(cFlow.id)
 
 	return nil
 }
@@ -164,7 +152,7 @@ func GetSubIDS(conn *net.TCPConn) ([]int, error) {
 
 	// (1) extract C structure
 	cStruct := C.mptcplib_get_sub_ids(fd)
-	defer C.mptcplib_free_res_subids(cStruct)
+	defer C.mptcplib_free_getsubids_result(cStruct)
 
 	if cStruct.errnoValue != 0 {
 		return nil, errnoToError("GetSubIDS", int(cStruct.errnoValue))
@@ -199,21 +187,23 @@ func GetSubTuple(conn *net.TCPConn, subId int) (*Subflow, error) {
 	// -- upper part: see end of document -- 
 
 	// (1) extract the C structure
-	cTuple := C.mptcplib_get_sub_tuple(fd, C.int(subId))
-	defer C.mptcplib_free_res_subtuple(cTuple)
+	cStruct := C.mptcplib_get_sub_tuple(fd, C.int(subId))
+	errnoValue := cStruct.errnoValue
+	cFlow := cStruct.flow
+	defer C.mptcplib_free_flow(cFlow)
 
-	if (cTuple.errnoValue != 0) {
-		return nil, errnoToError("GetSub", int(cTuple.errnoValue))
+	if (errnoValue != 0) {
+		return nil, errnoToError("GetSub", int(errnoValue))
 	}
 
 	// (2) extract C strings
-	cLocalString := C.sockaddrToString(cTuple.local, cTuple.local_len)
-	cRemoteString := C.sockaddrToString(cTuple.remote, cTuple.remote_len)
+	cLocalString := C.sockaddrToString(cFlow.local, cFlow.local_len)
+	cRemoteString := C.sockaddrToString(cFlow.remote, cFlow.remote_len)
 	defer C.free(unsafe.Pointer(cLocalString))
 	defer C.free(unsafe.Pointer(cRemoteString))
 
 	// (3) convert C values and return subflow
-	return &Subflow{C.GoString(cLocalString), C.GoString(cRemoteString), int(cTuple.id), int(cTuple.low_prio), }, nil
+	return &Subflow{C.GoString(cLocalString), C.GoString(cRemoteString), int(cFlow.id), int(cFlow.low_prio), }, nil
 }
 
 // set a subflow socket option (which should be a int value)
@@ -250,7 +240,7 @@ func GetSubSockoptInt(conn *net.TCPConn, subId int, optLevel int, optName int) (
 
 	dummyInt := C.int(0)
 	cOption := C.mptcplib_get_sub_sockopt(fd, C.int(subId), C.int(optLevel), C.int(optName), C.size_t(unsafe.Sizeof(dummyInt)))
-	defer C.mptcplib_free_res_sockopt(cOption)
+	defer C.mptcplib_free_getsubtockopt_result(cOption)
 
 	if cOption.errnoValue != 0 {
 		return 0, errnoToError("GetSubSockoptInt", int(cOption.errnoValue))

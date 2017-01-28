@@ -1,21 +1,73 @@
-/**
- * Copied from:
- *  https://github.com/aclarembeau/simpler-mptcp-api/blob/master/mptcp.c
- */
-
 #include "mptcplib.h"
 #include <string.h>
 #include <stdlib.h>
 #include <sys/socket.h>
-#include <stdio.h>
 #include <netinet/in.h>
+#include <netdb.h>
 
-struct syscall_res_subtuple mptcplib_open_sub(int sockfd,
-                                              struct sockaddr *sourceaddr, size_t sourcelen,
-                                              struct sockaddr *destaddr, size_t destlen,
-                                              int prio) {
+struct addrWithPort {
+    struct sockaddr *addr;
+    size_t addr_len;
+};
+
+struct addrWithPort resolveAddrWithPort(char *host, size_t host_len, unsigned short port, int family_hint) {
+    struct addrWithPort retVal = {NULL, 0};
+
+    struct addrinfo hints;
+    struct addrinfo *result;
+
+    // information about the address to resolve
+    memset(&hints, 0, sizeof(struct addrinfo));
+    hints.ai_family = family_hint;
+    hints.ai_socktype = SOCK_STREAM;
+    hints.ai_flags = AI_PASSIVE;
+    hints.ai_protocol = 0;
+    hints.ai_canonname = NULL;
+    hints.ai_addr = NULL;
+    hints.ai_next = NULL;
+
+    int s = getaddrinfo(host, NULL, &hints, &result);
+    if (s != 0) {
+        return retVal;
+    }
+
+    // allocate and copy the result
+    retVal.addr = malloc(result->ai_addrlen);
+    retVal.addr_len = result->ai_addrlen;
+    memcpy(retVal.addr, result->ai_addr, result->ai_addrlen);
+
+    // link with the port
+    if (retVal.addr->sa_family == AF_INET) {
+        ((struct sockaddr_in *) retVal.addr)->sin_port = htons(port);
+    } else {
+        ((struct sockaddr_in6 *) retVal.addr)->sin6_port = htons(port);
+    }
+
+    // and don't forget to free memory
+    freeaddrinfo(result);
+
+    return retVal;
+}
+
+void freeAddrWithPort(struct addrWithPort str) {
+    if(str.addr != NULL)
+        free(str.addr);
+}
+
+// --------------
+
+struct mptcplib_flow
+mptcplib_make_flow(char *source_host, unsigned short source_port, char *dest_host, unsigned short dest_port) {
+    struct addrWithPort local = resolveAddrWithPort(source_host, strlen(source_host),source_port, AF_UNSPEC );
+    struct addrWithPort remote = resolveAddrWithPort(dest_host, strlen(dest_host),dest_port, local.addr->sa_family );
+
+    struct mptcplib_flow res = {0, 0, local.addr, remote.addr, local.addr_len, remote.addr_len};
+    return res;
+}
+
+int mptcplib_open_sub(int sockfd, struct mptcplib_flow *tuple) {
     // allocate the mptcp socket api structures
-    int optlen = sizeof(struct mptcp_sub_tuple) + sourcelen + destlen;
+    int optlen = sizeof(struct mptcp_sub_tuple) + tuple->local_len + tuple->remote_len;
     struct mptcp_sub_tuple *sub_tuple = malloc(optlen);
 
     sub_tuple->id = 0;
@@ -23,35 +75,25 @@ struct syscall_res_subtuple mptcplib_open_sub(int sockfd,
 
     void *addr = &sub_tuple->addrs[0];
 
+    memcpy(addr, tuple->local, tuple->local_len);
+    addr += tuple->local_len;
+    memcpy(addr, tuple->remote, tuple->remote_len);
+
     // do the system call
-    memcpy(addr, sourceaddr, sourcelen);
-    addr += sourcelen;
-    memcpy(addr, destaddr, destlen);
-
     int error = getsockopt(sockfd, IPPROTO_TCP, MPTCP_OPEN_SUB_TUPLE, sub_tuple, &optlen);
-    if (error != 0) error = errno; // get the errno value
-
-    // format output and copy to structure
-
-    struct sockaddr *copied_source = NULL;
-    struct sockaddr *copied_dest = NULL;
-
-    if(error == 0) {
-        copied_source = malloc(sourcelen);
-        copied_dest = malloc(destlen);
-        memcpy(copied_source, sourceaddr, sourcelen);
-        memcpy(copied_dest, destaddr, destlen);
+    if (error == 0) {
+        tuple->id = sub_tuple->id;
+    } else {
+        error = errno;
     }
-
-    struct syscall_res_subtuple res = {error, sub_tuple->id, prio, copied_source, copied_dest, sourcelen, destlen};
 
     // don't forget to free native structure
     free(sub_tuple);
-    return res;
+    return error;
 }
 
 
-struct syscall_res_subids mptcplib_get_sub_ids(int sockfd) {
+struct mptcplib_getsubids_result mptcplib_get_sub_ids(int sockfd) {
     // allocate the mptcp socket api structures
     int i;
     unsigned int optlen = SUBLIST_MIN_SIZE;
@@ -69,17 +111,17 @@ struct syscall_res_subids mptcplib_get_sub_ids(int sockfd) {
 
     // format the output
     if (r == 0) {
-        struct syscall_res_subids ret = {0, ids};
+        struct mptcplib_getsubids_result ret = {0, ids};
         return ret;
     } else {
         free(ids);
-        struct syscall_res_subids ret = {r, NULL};
+        struct mptcplib_getsubids_result ret = {r, NULL};
         return ret;
     }
 }
 
 
-struct syscall_res_subtuple mptcplib_get_sub_tuple(int sockfd, int id) {
+struct mptcplib_getsubtuple_result mptcplib_get_sub_tuple(int sockfd, int id) {
     // allocate the mptcp socket api structure
     unsigned int optlen = sizeof(struct sockaddr_in6) * 2 + 40;
 
@@ -95,10 +137,12 @@ struct syscall_res_subtuple mptcplib_get_sub_tuple(int sockfd, int id) {
     int prio = -1;
 
     // format the output and copy local and remote addresses
-    struct syscall_res_subtuple res = {r, id, prio, NULL, NULL, 0, 0};
+    struct mptcplib_flow res_flow = {id, prio, NULL, NULL, 0, 0};
+
     if (r != 0) {
         free(sub_tuple);
-        return res;
+        struct mptcplib_getsubtuple_result res_final = {r, res_flow};
+        return res_final;
     }
 
     void *sin = &sub_tuple->addrs[0];
@@ -106,35 +150,36 @@ struct syscall_res_subtuple mptcplib_get_sub_tuple(int sockfd, int id) {
     // local
     struct sockaddr *stor = (struct sockaddr *) sin; // used to find the sa_family
     if (stor->sa_family == AF_INET) {
-        res.local_len = sizeof(struct sockaddr_in);
-        res.local = malloc(res.local_len);
-        memcpy(res.local, sin, res.local_len);
+        res_flow.local_len = sizeof(struct sockaddr_in);
+        res_flow.local = malloc(res_flow.local_len);
+        memcpy(res_flow.local, sin, res_flow.local_len);
         sin += sizeof(struct sockaddr_in);
     } else {
-        res.local_len = sizeof(struct sockaddr_in6);
-        res.local = malloc(res.local_len);
-        memcpy(res.local, sin, res.local_len);
+        res_flow.local_len = sizeof(struct sockaddr_in6);
+        res_flow.local = malloc(res_flow.local_len);
+        memcpy(res_flow.local, sin, res_flow.local_len);
         sin += sizeof(struct sockaddr_in6);
     }
 
     // remote
     struct sockaddr *stor2 = (struct sockaddr *) sin; // used to find the sa_family
     if (stor2->sa_family == AF_INET) {
-        res.remote_len = sizeof(struct sockaddr_in);
-        res.remote = malloc(res.remote_len);
-        memcpy(res.remote, sin, res.remote_len);
+        res_flow.remote_len = sizeof(struct sockaddr_in);
+        res_flow.remote = malloc(res_flow.remote_len);
+        memcpy(res_flow.remote, sin, res_flow.remote_len);
         sin += sizeof(struct sockaddr_in);
     } else {
-        res.remote_len = sizeof(struct sockaddr_in6);
-        res.remote = malloc(res.remote_len);
-        memcpy(res.remote, sin, res.remote_len);
+        res_flow.remote_len = sizeof(struct sockaddr_in6);
+        res_flow.remote = malloc(res_flow.remote_len);
+        memcpy(res_flow.remote, sin, res_flow.remote_len);
         sin += sizeof(struct sockaddr_in6);
     }
 
     // don't forget to free internal structure
     free(sub_tuple);
 
-    return res;
+    struct mptcplib_getsubtuple_result res_final = {r, res_flow};
+    return res_final;
 }
 
 int mptcplib_close_sub(int sockfd, int id, int how) {
@@ -172,7 +217,7 @@ int mptcplib_set_sub_sockopt(int sockfd, int id, int level, int opt, void *val, 
     return ret;
 }
 
-struct syscall_res_sockopt mptcplib_get_sub_sockopt(int sockfd, int id, int level, int opt, size_t size) {
+struct mptcplib_getsubsockopt_result mptcplib_get_sub_sockopt(int sockfd, int id, int level, int opt, size_t size) {
     // allocate the mptcp socket api structure
     struct mptcp_sub_getsockopt sub_sso;
 
@@ -190,20 +235,22 @@ struct syscall_res_sockopt mptcplib_get_sub_sockopt(int sockfd, int id, int leve
     if (error == -1) error = errno;
 
     // format output
-    struct syscall_res_sockopt res = {error, retval, retsize};
+    struct mptcplib_getsubsockopt_result res = {error, retval, retsize};
     return res;
 }
 
 /*
  * Memory freeing functions
  */
-void mptcplib_free_res_subids(struct syscall_res_subids ids){
+void mptcplib_free_getsubids_result(struct mptcplib_getsubids_result ids) {
     free(ids.ids);
 }
-void mptcplib_free_res_subtuple(struct syscall_res_subtuple tuple){
+
+void mptcplib_free_flow(struct mptcplib_flow tuple) {
     free(tuple.local);
     free(tuple.remote);
 }
-void mptcplib_free_res_sockopt(struct syscall_res_sockopt sockopt){
+
+void mptcplib_free_getsubtockopt_result(struct mptcplib_getsubsockopt_result sockopt) {
     free(sockopt.value);
 }
