@@ -1,3 +1,8 @@
+/**
+ * Copied from:
+ *  https://github.com/aclarembeau/simpler-mptcp-api/blob/master/mptcp.c
+ */
+
 #include "mptcplib.h"
 #include <string.h>
 #include <stdlib.h>
@@ -192,13 +197,13 @@ struct syscall_res_sockopt mptcplib_get_sub_sockopt(int sockfd, int id, int leve
 /*
  * Memory freeing functions
  */
-void mptcplib_free_res_subids(struct syscall_res_subids *ids){
-    free(ids->ids);
+void mptcplib_free_res_subids(struct syscall_res_subids ids){
+    free(ids.ids);
 }
-void mptcplib_free_res_subtuple(struct syscall_res_subtuple *tuple){
-    free(tuple->local);
-    free(tuple->remote);
+void mptcplib_free_res_subtuple(struct syscall_res_subtuple tuple){
+    free(tuple.local);
+    free(tuple.remote);
 }
-void mptcplib_free_res_sockopt(struct syscall_res_sockopt *sockopt){
-    free(sockopt->value);
+void mptcplib_free_res_sockopt(struct syscall_res_sockopt sockopt){
+    free(sockopt.value);
 }

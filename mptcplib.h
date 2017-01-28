@@ -2,6 +2,9 @@
  * Library that simplifies the usage of the multipath-tcp socket API
  * (using less system calls, allowing seemlessly the usage of IPv4/IPV6, ...)
  *
+ * Copied from:
+ *  https://github.com/aclarembeau/simpler-mptcp-api/blob/master/mptcp.h
+ *
  * By CLAREMBEAU Alexis
  * 01/24/2017
  */
@@ -47,9 +50,9 @@ struct syscall_res_sockopt {
 /*
  * Memory freeing functions
  */
-void mptcplib_free_res_subids(struct syscall_res_subids *ids);
-void mptcplib_free_res_subtuple(struct syscall_res_subtuple *tuple);
-void mptcplib_free_res_sockopt(struct syscall_res_sockopt *sockopt);
+void mptcplib_free_res_subids(struct syscall_res_subids ids);
+void mptcplib_free_res_subtuple(struct syscall_res_subtuple tuple);
+void mptcplib_free_res_sockopt(struct syscall_res_sockopt sockopt);
 
 /*
  * MPTCP manipulation functions
