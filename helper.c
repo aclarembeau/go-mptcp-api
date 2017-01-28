@@ -28,8 +28,3 @@ int intptrToValue(void *intptr) {
     return *ptrCasted;
 }
 
-
-void *extractStatusPtr(struct mptcplib_getsubids_result idStruct) {
-    return (void *) idStruct.ids->sub_status;
-}
-

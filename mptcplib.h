@@ -25,6 +25,11 @@ struct mptcplib_flow {
     size_t local_len, remote_len;          // Local and remote endpoints sizes
 };
 
+struct mptcplib_intarray {
+    int count;
+    int *values;
+};
+
 // Structure for the result of getsubtuple
 struct mptcplib_getsubtuple_result {
     int errnoValue;
@@ -34,7 +39,7 @@ struct mptcplib_getsubtuple_result {
 // Structure for the result of getsubids
 struct mptcplib_getsubids_result {
     int errnoValue;
-    struct mptcp_sub_ids *ids;
+    struct mptcplib_intarray ids;
 };
 
 // Structure for the result of getsockopt
@@ -72,7 +77,7 @@ struct mptcplib_getsubsockopt_result mptcplib_get_sub_sockopt(int sockfd, int id
 /*
  * Memory freeing functions
  */
-void mptcplib_free_getsubids_result(struct mptcplib_getsubids_result ids);
+void mptcplib_free_intarray(struct mptcplib_intarray arr);
 void mptcplib_free_flow(struct mptcplib_flow tuple);
 void mptcplib_free_getsubtockopt_result(struct mptcplib_getsubsockopt_result sockopt);
 

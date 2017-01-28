@@ -152,21 +152,21 @@ func GetSubIDS(conn *net.TCPConn) ([]int, error) {
 
 	// (1) extract C structure
 	cStruct := C.mptcplib_get_sub_ids(fd)
-	defer C.mptcplib_free_getsubids_result(cStruct)
+	defer C.mptcplib_free_intarray(cStruct.ids)
 
 	if cStruct.errnoValue != 0 {
 		return nil, errnoToError("GetSubIDS", int(cStruct.errnoValue))
 	}
 
 	// (2) make a go slice from sub_status
-	nSubflows := int(cStruct.ids.sub_count)
-	slice := (*[100]C.struct_mptcp_sub_status)(unsafe.Pointer(C.extractStatusPtr(cStruct)))[:nSubflows:nSubflows]
+	nSubflows := int(cStruct.ids.count)
+	slice := (*[1 << 30]C.int)(unsafe.Pointer(cStruct.ids.values))[:nSubflows:nSubflows]
 
 	// (3) only keep the id field
 	idSlice := make([]int, len(slice))
 	var i int
 	for i = 0; i < nSubflows; i++ {
-		idSlice[i] = int(slice[i].id)
+		idSlice[i] = int(slice[i])
 	}
 
 	// (4) return the result
